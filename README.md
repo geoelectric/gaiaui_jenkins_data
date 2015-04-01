@@ -11,5 +11,5 @@ If a particular job name is given, it will pull results for that job. Otherwise,
 
 `crunch_jenkins_html.py` iterates over the given job and outputs a summary table of results.
 
-`sample-job\` and `sample-results.txt` are included. The former will let you try out the crunching script, and the latter is an example of the output.
+`sample-job/` and `sample-results.txt` are included. The former will let you try out the crunching script, and the latter is an example of the output.
 
