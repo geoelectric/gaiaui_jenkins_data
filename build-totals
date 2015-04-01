@@ -1,0 +1,7 @@
+#!/bin/bash
+
+for i in flame*/; do 
+    i=`basename $i`
+    echo Processing $i...
+    ./crunch_output_html.py $1 $i | tee $i.summary
+done
