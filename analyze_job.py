@@ -22,26 +22,14 @@ OLD_FORMAT = re.compile(RESULT_PATTERN + CLASS_PATTERN + NAME_PATTERN)
 NEW_FORMAT = re.compile(RESULT_PATTERN + NAME_PATTERN)
 
 
-def abbreviate_test_name(name):
-    """Return a shorter version of the test name for the report"""
-
-    # Name could be one of:
-    #   file.py class.method
-    #   file.py
-    #
-    # We should only modify the first case
-
-    name_parts = name.split(' ')
-    if len(name_parts) == 2:
-        name = name_parts[1].split('.')[-1]
-    return name
+def default_job_data(job):
+    """Return the initial dictionary for the job"""
+    return {'global': {'name': job, 'runs': 0}, 
+            'tests': {}}
 
 
-def default_test_data(name, verbose):
+def default_test_data(name):
     """Return the initial dictionary for a given test"""
-
-    if not verbose:
-        name = abbreviate_test_name(name)
     
     return {'name': name,
             'results': 0, 'spurious': 0,
@@ -51,19 +39,9 @@ def default_test_data(name, verbose):
             'unknown': 0}
 
 
-def build_report_paths(job):
-    """Generates list of paths for report files to tabulate"""
-
-    FILENAME = 'output.html'
-
-    builds = os.listdir(job)
-    builds.sort(key=int)
-    
-    build_paths = (os.path.join(*[job, build, FILENAME]) for build in builds)
-    return (build_path for build_path in build_paths if os.path.exists(build_path))
-
-
 def make_new_format_name(test_class, test_name):
+    """Normalizes the old class/name format to the new name format"""
+
     # class is either blank or file.class
     class_components = test_class.split('.')
     if len(class_components) == 2:
@@ -73,6 +51,20 @@ def make_new_format_name(test_class, test_name):
         return final_name
 
     return test_name.strip()
+
+
+def build_report_paths(job_data):
+    """Generates list of paths for report files to tabulate"""
+
+    FILENAME = 'output.html'
+
+    job = job_data['global']['name']
+
+    builds = os.listdir(job)
+    builds.sort(key=int)
+    
+    build_paths = (os.path.join(*[job, build, FILENAME]) for build in builds)
+    return (build_path for build_path in build_paths if os.path.exists(build_path))
 
 
 def extract_suite(output):
@@ -108,7 +100,7 @@ def check_for_bad_run(build_report_path, suite):
     return False
 
 
-def add_build_to_results(build_report_path, job_data, verbose):
+def add_build_to_data(build_report_path, job_data):
     with open(build_report_path, 'r') as build_report:
         output = build_report.read()
 
@@ -118,9 +110,11 @@ def add_build_to_results(build_report_path, job_data, verbose):
         return
 
     is_bad_run = check_for_bad_run(build_report_path, suite)
+    
+    job_data['global']['runs'] += 1
 
     for test in suite:
-        test_data = job_data['tests'].get(test['name'], default_test_data(test['name'], verbose))
+        test_data = job_data['tests'].setdefault(test['name'], default_test_data(test['name']))
         test_data['results'] += 1
 
         if test['result'] == 'Skipped' or test['result'] == 'SKIP':
@@ -143,8 +137,6 @@ def add_build_to_results(build_report_path, job_data, verbose):
             test_data['unknown'] += 1
             test_data['results'] -= 1
 
-        job_data['tests'][test['name']] = test_data
-
 
 def remove_unran_tests(job_data):
     """Remove any tests that were skipped for the entire job"""
@@ -165,15 +157,38 @@ def add_percentage_failed(job_data):
         t['pct_failed'] = int(float(t['failures'] + t['errors']) / t['results'] * 100)
 
 
-def tests_sorted_by_percentage_failed(job_data):
+def abbreviate_test_name(name):
+    """Return a shorter version of the test name for the report"""
+
+    # Name could be one of:
+    #   file.py class.method
+    #   file.py
+    #
+    # We should only modify the first case
+
+    name_parts = name.split(' ')
+    if len(name_parts) == 2:
+        name = name_parts[1].split('.')[-1]
+    return name
+
+
+def test_rows_sorted_by_percentage_failed(job_data, verbose):
     """Return the sorted list of tests"""
     tests = job_data['tests'].values()
+    
+    if not verbose:
+        for test in tests:
+            test['name'] = abbreviate_test_name(test['name'])
+        
     tests.sort(key=lambda t: t['pct_failed'])
     return tests
 
 
-def report(job, job_data, sorted_tests):
-    max_len = max([len(test['name']) for test in sorted_tests]) + 2
+def report(job_data, verbose):
+    sorted_tests = test_rows_sorted_by_percentage_failed(job_data, verbose)
+    max_len = max((len(test['name']) for test in sorted_tests)) + 2
+
+    job = job_data['global']['name']
 
     print
     print '%s' % ('-' * len(job))
@@ -200,18 +215,16 @@ def report(job, job_data, sorted_tests):
     print
 
 
-def analyze_job(job, verbose):
-    job_data = {'global': {'runs': 0}, 'tests': {}}
+def analyze_job(job):
+    job_data = default_job_data(job)
     
-    for build_report_path in build_report_paths(job):
-        job_data['global']['runs'] += 1
-        add_build_to_results(build_report_path, job_data, verbose)
+    for build_report_path in build_report_paths(job_data):
+        add_build_to_data(build_report_path, job_data)
 
     remove_unran_tests(job_data)
     add_percentage_failed(job_data)
 
-    sorted_tests = tests_sorted_by_percentage_failed(job_data)
-    report(job, job_data, sorted_tests)
+    return job_data
 
 
 def main():
@@ -222,7 +235,8 @@ def main():
         job = sys.argv[1]
         verbose = False
 
-    analyze_job(job, verbose)
+    job_data = analyze_job(job)
+    report(job_data, verbose)
 
 
 if __name__ == '__main__':
