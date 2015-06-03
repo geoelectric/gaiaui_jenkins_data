@@ -24,6 +24,7 @@ NEW_FORMAT = re.compile(RESULT_PATTERN + NAME_PATTERN)
 
 def default_job_data(job):
     """Return the initial dictionary for the job"""
+
     return {'global': {'name': job, 'runs': 0}, 
             'tests': {}}
 
@@ -188,8 +189,9 @@ def abbreviate_test_name(name):
     return name
 
 
-def test_rows_sorted_by_percentage_failed(job_data, verbose):
+def formatted_test_rows(job_data, verbose):
     """Return the sorted list of tests formatted for display"""
+    
     tests = job_data['tests'].values()
     
     if not verbose:
@@ -203,8 +205,8 @@ def test_rows_sorted_by_percentage_failed(job_data, verbose):
 def report(job_data, verbose):
     """Outputs the final report"""
 
-    sorted_tests = test_rows_sorted_by_percentage_failed(job_data, verbose)
-    max_len = max((len(test['name']) for test in sorted_tests)) + 2
+    test_rows = formatted_test_rows(job_data, verbose)
+    max_len = max((len(row['name']) for row in test_rows)) + 2
 
     job = job_data['global']['name']
 
@@ -213,23 +215,23 @@ def report(job_data, verbose):
     print '%s' % job
     print '%s' % ('-' * len(job))
     print
-    print '%d tests found in %d runs.' % (len(sorted_tests), job_data['global']['runs'])
+    print '%d tests found in %d runs.' % (len(test_rows), job_data['global']['runs'])
     print
-    for test in sorted_tests:
-        padding = ' ' * (max_len - len(test['name']))
+    for row in test_rows:
+        padding = ' ' * (max_len - len(row['name']))
         print ('  %s()%s: %4d results, %4d skips, %4d passes, %4d failures, '
                '%4d xfails, %4d upasses, %4d errors, %4d spurious, (%d%% failed)') % (
-            test['name'],
+            row['name'],
             padding,
-            test['results'],
-            test['skips'],
-            test['passes'],
-            test['failures'],
-            test['xfails'],
-            test['upasses'],
-            test['errors'],
-            test['spurious'],
-            test['pct_failed'])
+            row['results'],
+            row['skips'],
+            row['passes'],
+            row['failures'],
+            row['xfails'],
+            row['upasses'],
+            row['errors'],
+            row['spurious'],
+            row['pct_failed'])
     print
 
 
