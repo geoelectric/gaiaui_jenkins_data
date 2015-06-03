@@ -87,7 +87,7 @@ def extract_suite(output):
 
 
 def check_for_bad_run(build_report_path, suite):
-    """Makes a call as to whether run is probably bad"""
+    """Makes a call as to whether run is probably bad based on percentage of failures"""
 
     num_errors = reduce(lambda x, y: x +
                         (1 if y['result'] == 'Error' else 0), suite, 0)
@@ -101,6 +101,8 @@ def check_for_bad_run(build_report_path, suite):
 
 
 def add_build_to_data(build_report_path, job_data):
+    """Adds a single report to the cumulative job data"""
+
     with open(build_report_path, 'r') as build_report:
         output = build_report.read()
 
@@ -157,6 +159,20 @@ def add_percentage_failed(job_data):
         t['pct_failed'] = int(float(t['failures'] + t['errors']) / t['results'] * 100)
 
 
+def analyze_job(job):
+    """Top level procedure for overall analysis"""
+
+    job_data = default_job_data(job)
+    
+    for build_report_path in build_report_paths(job_data):
+        add_build_to_data(build_report_path, job_data)
+
+    remove_unran_tests(job_data)
+    add_percentage_failed(job_data)
+
+    return job_data
+
+
 def abbreviate_test_name(name):
     """Return a shorter version of the test name for the report"""
 
@@ -173,7 +189,7 @@ def abbreviate_test_name(name):
 
 
 def test_rows_sorted_by_percentage_failed(job_data, verbose):
-    """Return the sorted list of tests"""
+    """Return the sorted list of tests formatted for display"""
     tests = job_data['tests'].values()
     
     if not verbose:
@@ -185,6 +201,8 @@ def test_rows_sorted_by_percentage_failed(job_data, verbose):
 
 
 def report(job_data, verbose):
+    """Outputs the final report"""
+
     sorted_tests = test_rows_sorted_by_percentage_failed(job_data, verbose)
     max_len = max((len(test['name']) for test in sorted_tests)) + 2
 
@@ -213,18 +231,6 @@ def report(job_data, verbose):
             test['spurious'],
             test['pct_failed'])
     print
-
-
-def analyze_job(job):
-    job_data = default_job_data(job)
-    
-    for build_report_path in build_report_paths(job_data):
-        add_build_to_data(build_report_path, job_data)
-
-    remove_unran_tests(job_data)
-    add_percentage_failed(job_data)
-
-    return job_data
 
 
 def main():
