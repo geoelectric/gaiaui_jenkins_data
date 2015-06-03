@@ -6,13 +6,15 @@
 
 """Analyzes Gaia Jenkins result reports for a given job and tabulates statistics per test"""
 
+import argparse
+import dateutil.parser
 import logging
 import os
 import re
 import sys
 
 
-logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.DEBUG)
+logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.INFO)
 
 RESULT_PATTERN = r'<td class="col-result">([a-zA-Z ]+)</td>\s*'
 CLASS_PATTERN = r'<td class="col-class">([\w\.]*)</td>\s*'
@@ -20,6 +22,8 @@ NAME_PATTERN = r'<td class="col-name">(.+)</td>'
 
 OLD_FORMAT = re.compile(RESULT_PATTERN + CLASS_PATTERN + NAME_PATTERN)
 NEW_FORMAT = re.compile(RESULT_PATTERN + NAME_PATTERN)
+
+DATE_PATTERN = re.compile(r'Report generated on (.+) at')
 
 
 def default_job_data(job):
@@ -101,11 +105,33 @@ def check_for_bad_run(build_report_path, suite):
     return False
 
 
-def add_build_to_data(build_report_path, job_data):
+def add_build_to_data(build_report_path, job_data, from_date, to_date):
     """Adds a single report to the cumulative job data"""
 
     with open(build_report_path, 'r') as build_report:
         output = build_report.read()
+
+    if from_date or to_date:
+        report_dates = DATE_PATTERN.findall(output)
+        if len(report_dates) == 0:
+            logging.warning('No date found in %s', build_report_path)
+            return
+        report_date = report_dates[0]
+
+        report_dt = dateutil.parser.parse(report_date)
+
+        if from_date:
+            from_dt = dateutil.parser.parse(from_date)
+            if from_dt > report_dt:
+                logging.debug('Skipping %s, from_date %s later than %s', build_report_path, from_date, report_date) 
+                return
+
+        if to_date:
+            to_dt = dateutil.parser.parse(to_date)
+            if to_dt < report_dt:
+                logging.debug('Skipping %s, to_date %s earlier than %s', build_report_path, to_date, report_date)
+                return
+
 
     suite = extract_suite(output)
     if len(suite) == 0:
@@ -160,13 +186,18 @@ def add_percentage_failed(job_data):
         t['pct_failed'] = int(float(t['failures'] + t['errors']) / t['results'] * 100)
 
 
-def analyze_job(job):
+def analyze_job(job, args):
     """Top level procedure for overall analysis"""
+
+    job = args.job
+    from_date = args.from_date
+    to_date = args.to_date
+
 
     job_data = default_job_data(job)
     
     for build_report_path in build_report_paths(job_data):
-        add_build_to_data(build_report_path, job_data)
+        add_build_to_data(build_report_path, job_data, from_date, to_date)
 
     remove_unran_tests(job_data)
     add_percentage_failed(job_data)
@@ -236,14 +267,25 @@ def report(job_data, verbose):
 
 
 def main():
-    if len(sys.argv) > 2:
-        job = sys.argv[2]
-        verbose = True
-    else:
-        job = sys.argv[1]
-        verbose = False
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('job',
+                        help='A jenkins job')
+    parser.add_argument('-v', '--verbose',
+                        help='Use full test name',
+                        action='store_true',
+                        default=False)
+    parser.add_argument('-f', '--from_date',
+                        help='Beginning date',
+                        default=None)
+    parser.add_argument('-t', '--to_date',
+                        help='Ending date',
+                        default=None)
+    args = parser.parse_args()
 
-    job_data = analyze_job(job)
+    job = args.job
+    verbose = args.verbose
+
+    job_data = analyze_job(job, args)
     report(job_data, verbose)
 
 
