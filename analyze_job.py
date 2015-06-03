@@ -69,7 +69,7 @@ def build_report_paths(job_data):
     builds = os.listdir(job)
     builds.sort(key=int)
     
-    build_paths = (os.path.join(*[job, build, FILENAME]) for build in builds)
+    build_paths = (os.path.join(job, build, FILENAME) for build in builds)
     return (build_path for build_path in build_paths if os.path.exists(build_path))
 
 
@@ -187,13 +187,8 @@ def add_percentage_failed(job_data):
         t['pct_failed'] = int(float(t['failures'] + t['errors']) / t['results'] * 100)
 
 
-def analyze_job(args):
+def analyze_job(job, from_date, to_date):
     """Top level procedure for overall analysis"""
-
-    job = args.job
-    from_date = args.from_date
-    to_date = args.to_date
-
 
     job_data = default_job_data(job)
     
@@ -300,7 +295,7 @@ def main():
                         default=None)
     args = parser.parse_args()
 
-    job_data = analyze_job(args)
+    job_data = analyze_job(args.job, args.from_date, args.to_date)
     report(job_data, args)
 
 
