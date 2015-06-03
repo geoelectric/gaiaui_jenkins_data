@@ -7,11 +7,12 @@
 """Analyzes Gaia Jenkins result reports for a given job and tabulates statistics per test"""
 
 import argparse
-import dateutil.parser
 import logging
 import os
 import re
 import sys
+
+import dateutil.parser
 
 
 logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.INFO)
@@ -186,7 +187,7 @@ def add_percentage_failed(job_data):
         t['pct_failed'] = int(float(t['failures'] + t['errors']) / t['results'] * 100)
 
 
-def analyze_job(job, args):
+def analyze_job(args):
     """Top level procedure for overall analysis"""
 
     job = args.job
@@ -233,18 +234,35 @@ def formatted_test_rows(job_data, verbose):
     return tests
 
 
-def report(job_data, verbose):
+def report(job_data, args):
     """Outputs the final report"""
 
-    test_rows = formatted_test_rows(job_data, verbose)
+    test_rows = formatted_test_rows(job_data, args.verbose)
     max_len = max((len(row['name']) for row in test_rows)) + 2
 
-    job = job_data['global']['name']
+    header = job_data['global']['name']
+    from_str = ''
+    to_str = ''
+    spacer = ''
+    
+    if args.from_date or args.to_date:
+        if args.from_date:
+            from_dt = dateutil.parser.parse(args.from_date)
+            from_str = 'from %s' % from_dt.date()
+
+        if args.from_date and args.to_date:
+            spacer = ' '
+        
+        if args.to_date:
+            to_dt = dateutil.parser.parse(args.to_date)
+            to_str = 'to %s' % to_dt.date()
+
+        header += ' (%s%s%s)' % (from_str, spacer, to_str)
 
     print
-    print '%s' % ('-' * len(job))
-    print '%s' % job
-    print '%s' % ('-' * len(job))
+    print '%s' % ('-' * len(header))
+    print '%s' % header
+    print '%s' % ('-' * len(header))
     print
     print '%d tests found in %d runs.' % (len(test_rows), job_data['global']['runs'])
     print
@@ -282,11 +300,8 @@ def main():
                         default=None)
     args = parser.parse_args()
 
-    job = args.job
-    verbose = args.verbose
-
-    job_data = analyze_job(job, args)
-    report(job_data, verbose)
+    job_data = analyze_job(args)
+    report(job_data, args)
 
 
 if __name__ == '__main__':
